@@ -96,7 +96,7 @@ asm/loop1_O3_i386.S: loop1.cpp
 bin/loop1_O3_i386: loop1.cpp
 	g++ -O3 -march=i386 -m32 ${CXXFLAGS} loop1.cpp -o $@
 
-bin/loop1_opencl_O3: loop1_opencl.cpp
+bin/loop1_opencl_O3: loop1_opencl.cpp opencl_helper.h
 	g++ -O3 ${CXXFLAGS} loop1_opencl.cpp -l OpenCL -o $@
 
 bin/opencl_test: opencl_test.cpp opencl_helper.h
