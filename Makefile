@@ -1,4 +1,4 @@
-CXXFLAGS=-std=c++11
+CXXFLAGS=-std=c++11 -Wall -Werror -Wextra
 
 all: asm/loop1_O0.S bin/loop1_O0 asm/loop1_O1.S bin/loop1_O1 asm/loop1_O2.S bin/loop1_O2 asm/loop1_O3.S bin/loop1_O3 asm/loop1_O2_avx.S bin/loop1_O2_avx asm/loop1_O2_avx2.S bin/loop1_O2_avx2 asm/loop1_O2_native.S bin/loop1_O2_native asm/loop1_O2_i386.S bin/loop1_O2_i386 asm/loop1_O2_i686.S bin/loop1_O2_i686 asm/loop1_O2_nehalem.S bin/loop1_O2_nehalem asm/loop1_O3_native.S bin/loop1_O3_native asm/loop1_O3_skylake-avx512.S bin/loop1_O3_skylake-avx512 asm/loop1_O3_knl.S bin/loop1_O3_knl asm/loop1_O3_nehalem.S bin/loop1_O3_nehalem asm/loop1_O3_i386.S bin/loop1_O3_i386 bin/loop1_opencl_O3 bin/opencl_test
 
@@ -99,7 +99,7 @@ bin/loop1_O3_i386: loop1.cpp
 bin/loop1_opencl_O3: loop1_opencl.cpp
 	g++ -O3 ${CXXFLAGS} loop1_opencl.cpp -l OpenCL -o $@
 
-bin/opencl_test: opencl_test.cpp
+bin/opencl_test: opencl_test.cpp opencl_helper.h
 	g++ -O3 ${CXXFLAGS} opencl_test.cpp -l OpenCL -o $@
 
 clean:
