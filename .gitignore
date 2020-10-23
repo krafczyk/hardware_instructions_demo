@@ -174,5 +174,9 @@ cython_debug/
 CMakeCache.txt
 CMakeFiles
 
+# Install directories
 bin
 asm
+
+# valgrind
+vgcore* 
