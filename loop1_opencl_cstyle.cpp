@@ -6,7 +6,9 @@
 
 #include <CL/cl.h>
 
-std::string add_arrays_kernel = R"CODE(__kernel void array_add(__global const float* A, __global const float* B, __global float* C) {
+#define BUF_TYPE float
+
+std::string add_arrays_kernel = R"CODE(__kernel void array_add(__global const BUF_TYPE* A, __global const BUF_TYPE* B, __global BUF_TYPE* C) {
     // Get the index of the current element to be processed
     int i = get_global_id(0);
 
@@ -18,15 +20,15 @@ int main() {
     // Initialize random number generator
     std::mt19937_64 generator;
     generator.seed(42);
-    std::uniform_real_distribution<float> distribution(-1., 1.);
+    std::uniform_real_distribution<BUF_TYPE> distribution(-1., 1.);
     auto gen = std::bind(distribution, generator);
 
     // Initialize arrays
-    size_t num_gen = 100000000;
+    size_t num_gen = 1<<(30-2);
 
-    float* array1 = new float[num_gen];
-    float* array2 = new float[num_gen];
-    float* array3 = new float[num_gen];
+    BUF_TYPE* array1 = new BUF_TYPE[num_gen];
+    BUF_TYPE* array2 = new BUF_TYPE[num_gen];
+    BUF_TYPE* array3 = new BUF_TYPE[num_gen];
 
     // Fill arrays with values
     for(size_t i=0; i < num_gen; ++i) {
@@ -46,9 +48,9 @@ int main() {
     cl_command_queue command_queue = clCreateCommandQueueWithProperties(context, device_id, 0, NULL);
 
     // Create memory buffers
-    cl_mem array1_mem_obj = clCreateBuffer(context, CL_MEM_READ_ONLY, num_gen*sizeof(float), NULL, &ret);
-    cl_mem array2_mem_obj = clCreateBuffer(context, CL_MEM_READ_ONLY, num_gen*sizeof(float), NULL, &ret);
-    cl_mem array3_mem_obj = clCreateBuffer(context, CL_MEM_WRITE_ONLY, num_gen*sizeof(float), NULL, &ret);
+    cl_mem array1_mem_obj = clCreateBuffer(context, CL_MEM_READ_ONLY, num_gen*sizeof(BUF_TYPE), NULL, &ret);
+    cl_mem array2_mem_obj = clCreateBuffer(context, CL_MEM_READ_ONLY, num_gen*sizeof(BUF_TYPE), NULL, &ret);
+    cl_mem array3_mem_obj = clCreateBuffer(context, CL_MEM_WRITE_ONLY, num_gen*sizeof(BUF_TYPE), NULL, &ret);
 
     // Create program for the kernel
     size_t prog_size = add_arrays_kernel.size();
@@ -62,8 +64,8 @@ int main() {
     auto start = std::chrono::high_resolution_clock::now();
 
     // Copy arrays to their buffers
-    ret = clEnqueueWriteBuffer(command_queue, array1_mem_obj, CL_TRUE, 0, num_gen*sizeof(float), array1, 0, NULL, NULL);
-    ret = clEnqueueWriteBuffer(command_queue, array2_mem_obj, CL_TRUE, 0, num_gen*sizeof(float), array2, 0, NULL, NULL);
+    ret = clEnqueueWriteBuffer(command_queue, array1_mem_obj, CL_TRUE, 0, num_gen*sizeof(BUF_TYPE), array1, 0, NULL, NULL);
+    ret = clEnqueueWriteBuffer(command_queue, array2_mem_obj, CL_TRUE, 0, num_gen*sizeof(BUF_TYPE), array2, 0, NULL, NULL);
 
     // Set kernel arguments
     ret = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void*) &array1_mem_obj);
@@ -77,12 +79,12 @@ int main() {
 
     // Read the result memory buffer out
 
-    ret = clEnqueueReadBuffer(command_queue, array3_mem_obj, CL_TRUE, 0, num_gen*sizeof(float), array3, 0, NULL, NULL);
+    ret = clEnqueueReadBuffer(command_queue, array3_mem_obj, CL_TRUE, 0, num_gen*sizeof(BUF_TYPE), array3, 0, NULL, NULL);
 
     auto stop = std::chrono::high_resolution_clock::now();
 
     // Do something with the arrays so the addition isn't optimized out.
-    float sum = 0.;
+    BUF_TYPE sum = 0.;
     for(size_t i=0; i < num_gen; ++i) {
         sum += array3[i];
     }

@@ -10,14 +10,13 @@ inline float to_float(int in) {
     return (float) in;
 }
 
-std::string add_arrays_kernel =
-    "__kernel void array_add(__global const float* A, __global const float* B, __global float* C) {"
-    "   // Get the index of the current element to be processed"
-    "   int i = get_global_id(0);"
-    ""
-    "   // Do the operation"
-    "   C[i] = A[i] + B[i];"
-    "}";
+std::string add_arrays_kernel = R"CODE(__kernel void array_add(__global const float* A, __global const float* B, __global float* C) {
+    // Get the index of the current element to be processed
+    int i = get_global_id(0);
+
+    // Do the operation
+    C[i] = A[i] + B[i];
+})CODE";
 
 int main() {
     // Initialize random number generator
@@ -27,14 +26,14 @@ int main() {
     auto gen = std::bind(distribution, generator);
 
     // Initialize arrays
-    int num_gen = 100000000;
+    size_t num_gen = 1<<(30-2);
 
     float* array1 = new float[num_gen];
     float* array2 = new float[num_gen];
-    //float* array3 = new float[num_gen];
+    float* array3 = new float[num_gen];
 
     // Fill arrays with values
-    for(int i=0; i < num_gen; ++i) {
+    for(size_t i=0; i < num_gen; ++i) {
         array1[i] = gen();
         array2[i] = gen();
     }
@@ -85,55 +84,63 @@ int main() {
         }
     }
 
-    // Get openCL ready
-    //
-    /*
-    //
-    // Create an OpenCL context
-    cl_context context = clCreateContext(NULL, 1, &device_id, NULL, NULL, &ret);
-    cl_command_queue command_queue = clCreateCommandQueueWithProperties(context, device_id, 0, &ret);
-    
-    return 0;
+    // Create context
+    std::vector<cl::Device> device_container;
+    device_container.push_back(device_to_use);
 
-    // Create memory buffers
-    cl_mem array1_mem_obj = clCreateBuffer(context, CL_MEM_READ_ONLY, num_gen*sizeof(float), NULL, &ret);
-    cl_mem array2_mem_obj = clCreateBuffer(context, CL_MEM_READ_ONLY, num_gen*sizeof(float), NULL, &ret);
-    cl_mem array3_mem_obj = clCreateBuffer(context, CL_MEM_READ_ONLY, num_gen*sizeof(float), NULL, &ret);
+    cl::Context context(device_container);
 
-    // Create program for the kernel
-    size_t prog_size = add_arrays_kernel.size();
-    const char* program_str = add_arrays_kernel.c_str();
-    cl_program program = clCreateProgramWithSource(context, 1, &program_str, &prog_size, &ret);
+    // Build program on our context
+    cl::Program addArraysProgram(context, add_arrays_kernel);
+    try {
+        cl_int ret = addArraysProgram.build();
+        if(ret != CL_SUCCESS) {
+            std::cerr << "Problem building OpenCL Program!" << std::endl;
+            return 1;
+        }
+    } catch (...) {
+        cl_int buildErr = CL_SUCCESS;
+        auto buildInfo = addArraysProgram.getBuildInfo<CL_PROGRAM_BUILD_LOG>(&buildErr);
+        std::cerr << "Problem building OpenCL Program!" << std::endl;
+        for (auto& pair: buildInfo) {
+            std::cerr << pair.second << std::endl << std::endl;
+        }
+        return 1;
+    }
 
-    ret = clBuildProgram(program, 1, &device_id, NULL, NULL, NULL);
+    cl_int ret = 0;
+    cl::Buffer array1_buf_obj(context, CL_MEM_READ_ONLY, num_gen*sizeof(float), NULL, &ret);
+    if(ret != CL_SUCCESS) {
+        std::cerr << "Error allocating buffer!" << std::endl;
+    }
+    cl::Buffer array2_buf_obj(context, CL_MEM_READ_ONLY, num_gen*sizeof(float), NULL, &ret);
+    if(ret != CL_SUCCESS) {
+        std::cerr << "Error allocating buffer!" << std::endl;
+    }
+    cl::Buffer array3_buf_obj(context, CL_MEM_WRITE_ONLY, num_gen*sizeof(float), NULL, &ret);
+    if(ret != CL_SUCCESS) {
+        std::cerr << "Error allocating buffer!" << std::endl;
+    }
 
-    cl_kernel kernel = clCreateKernel(program, "array_add", &ret);
+    cl::CommandQueue command_queue(context);
 
+    cl::Kernel kernel(addArraysProgram, "add_arrays_kernel");
+    kernel.setArg(0, (void*) &array1_buf_obj);
+    kernel.setArg(1, (void*) &array2_buf_obj);
+    kernel.setArg(2, (void*) &array3_buf_obj);
+
+    cl::NDRange global_range(num_gen);
+    cl::NDRange local_range(64);
     auto start = std::chrono::high_resolution_clock::now();
-
-    // Copy arrays to their buffers
-    ret = clEnqueueWriteBuffer(command_queue, array1_mem_obj, CL_TRUE, 0, num_gen*sizeof(float), array1, 0, NULL, NULL);
-    ret = clEnqueueWriteBuffer(command_queue, array2_mem_obj, CL_TRUE, 0, num_gen*sizeof(float), array2, 0, NULL, NULL);
-
-    // Set kernel arguments
-    ret = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void*) &array1_mem_obj);
-    ret = clSetKernelArg(kernel, 1, sizeof(cl_mem), (void*) &array2_mem_obj);
-    ret = clSetKernelArg(kernel, 2, sizeof(cl_mem), (void*) &array3_mem_obj);
-
-    // Execute kernel
-    size_t global_item_size = num_gen;
-    size_t local_item_size = 64;
-    ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &global_item_size, &local_item_size, 0, NULL, NULL);
-
-    // Read the result memory buffer out
-
-    ret = clEnqueueReadBuffer(command_queue, array3_mem_obj, CL_TRUE, 0, num_gen*sizeof(float), array3, 0, NULL, NULL);
-
+    command_queue.enqueueWriteBuffer(array1_buf_obj, CL_TRUE, 0, num_gen*sizeof(float), array1);
+    command_queue.enqueueWriteBuffer(array2_buf_obj, CL_TRUE, 0, num_gen*sizeof(float), array2);
+    command_queue.enqueueNDRangeKernel(kernel, cl::NullRange, global_range, local_range);
+    command_queue.enqueueReadBuffer(array3_buf_obj, CL_TRUE, 0, num_gen*sizeof(float), array3);
     auto stop = std::chrono::high_resolution_clock::now();
 
     // Do something with the arrays so the addition isn't optimized out.
     float sum = 0.;
-    for(int i=0; i < num_gen; ++i) {
+    for(size_t i=0; i < num_gen; ++i) {
         sum += array3[i];
     }
 
@@ -150,5 +157,4 @@ int main() {
     delete [] array3;
 
     return 0;
-    */
 }

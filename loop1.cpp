@@ -7,8 +7,8 @@ inline float to_float(int in) {
     return (float) in;
 }
 
-void add_arrays(float* array1, float* array2, float* array3, int N) {
-    for(int i=0; i < N; ++i) {
+void add_arrays(float* array1, float* array2, float* array3, size_t N) {
+    for(size_t i=0; i < N; ++i) {
         array3[i] = array1[i]+array2[i];
     }
 }
@@ -21,14 +21,14 @@ int main() {
     auto gen = std::bind(distribution, generator);
 
     // Initialize arrays
-    int num_gen = 100000000;
+    size_t num_gen = 1<<(30-2);
 
     float* array1 = new float[num_gen];
     float* array2 = new float[num_gen];
     float* array3 = new float[num_gen];
 
     // Fill arrays with values
-    for(int i=0; i < num_gen; ++i) {
+    for(size_t i=0; i < num_gen; ++i) {
         array1[i] = gen();
         array2[i] = gen();
     }
@@ -41,7 +41,7 @@ int main() {
 
     // Do something with the arrays so the addition isn't optimized out.
     float sum = 0.;
-    for(int i=0; i < num_gen; ++i) {
+    for(size_t i=0; i < num_gen; ++i) {
         sum += array3[i];
     }
 
