@@ -43,9 +43,10 @@ target_compile_options(loop1_${compile_version}_${buf_type} PRIVATE ${compile_op
 target_compile_options(loop1_opencl_cstyle_${compile_version}_${buf_type} PRIVATE ${compile_options})
 if(NOT "${link_options}" STREQUAL "_")
 set_target_properties(loop1_${compile_version}_${buf_type} PROPERTIES LINK_FLAGS ${link_options})
-set_target_properties(loop1_opencl_cstyle_${compile_version}_${buf_type} PROPERTIES LINK_FLAGS ${link_options})
-endif()
+set_target_properties(loop1_opencl_cstyle_${compile_version}_${buf_type} PROPERTIES LINK_FLAGS "${link_options} -lOpenCL")
+else()
 set_target_properties(loop1_opencl_cstyle_${compile_version}_${buf_type} PROPERTIES LINK_FLAGS "-lOpenCL")
+endif()
 endforeach()
 
 endforeach()
