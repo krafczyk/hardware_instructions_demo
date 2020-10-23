@@ -173,6 +173,7 @@ cython_debug/
 # Cmake
 CMakeCache.txt
 CMakeFiles
+Makefile
 
 # Install directories
 bin
