@@ -3,11 +3,7 @@
 #include <functional>
 #include <chrono>
 
-inline float to_float(int in) {
-    return (float) in;
-}
-
-void add_arrays(float* array1, float* array2, float* array3, size_t N) {
+void add_arrays(BUF_TYPE* array1, BUF_TYPE* array2, BUF_TYPE* array3, size_t N) {
     for(size_t i=0; i < N; ++i) {
         array3[i] = array1[i]+array2[i];
     }
@@ -17,15 +13,18 @@ int main() {
     // Initialize random number generator
     std::mt19937_64 generator;
     generator.seed(42);
-    std::uniform_real_distribution<float> distribution(-1., 1.);
+    std::uniform_real_distribution<BUF_TYPE> distribution(-1., 1.);
     auto gen = std::bind(distribution, generator);
 
     // Initialize arrays
-    size_t num_gen = 1<<(30-2);
+    size_t num_gen = (1<<30)/sizeof(BUF_TYPE);
 
-    float* array1 = new float[num_gen];
-    float* array2 = new float[num_gen];
-    float* array3 = new float[num_gen];
+    std::cout << "Performing test with " << num_gen << " array elements" << std::endl;
+    std::cout << "Array size: " << num_gen*sizeof(BUF_TYPE) << " Bytes" << std::endl;
+
+    BUF_TYPE* array1 = new BUF_TYPE[num_gen];
+    BUF_TYPE* array2 = new BUF_TYPE[num_gen];
+    BUF_TYPE* array3 = new BUF_TYPE[num_gen];
 
     // Fill arrays with values
     for(size_t i=0; i < num_gen; ++i) {
@@ -40,7 +39,7 @@ int main() {
     auto stop = std::chrono::high_resolution_clock::now();
 
     // Do something with the arrays so the addition isn't optimized out.
-    float sum = 0.;
+    BUF_TYPE sum = 0.;
     for(size_t i=0; i < num_gen; ++i) {
         sum += array3[i];
     }
