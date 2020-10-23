@@ -6,7 +6,9 @@
 
 #include <CL/cl.h>
 
+#ifndef BUF_TYPE
 #define BUF_TYPE float
+#endif
 
 std::string add_arrays_kernel = R"CODE(__kernel void array_add(__global const BUF_TYPE* A, __global const BUF_TYPE* B, __global BUF_TYPE* C) {
     // Get the index of the current element to be processed

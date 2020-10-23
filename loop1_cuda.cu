@@ -4,6 +4,10 @@
 #include <chrono>
 #include <unistd.h>
 
+#ifndef BUF_TYPE
+#define BUF_TYPE float
+#endif
+
 inline float to_float(int in) {
     return (float) in;
 }
