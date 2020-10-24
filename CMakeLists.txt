@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(hardware_instructions_demo VERSION 1.0)
+project(hardware_instructions_demo VERSION 1.0 LANGUAGES CXX CUDA)
 
 set(CMAKE_C_COMPILER gcc)
 set(CMAKE_CXX_COMPILER g++)
@@ -54,5 +54,7 @@ set_target_properties(loop1_opencl_${compile_version}_${buf_type} PROPERTIES LIN
 set_target_properties(loop1_opencl_cstyle_${compile_version}_${buf_type} PROPERTIES LINK_FLAGS "-lOpenCL")
 endif()
 endforeach()
-
 endforeach()
+
+add_executable(loop1_cuda loop1_cuda.cu)
+target_compile_options(loop1_cuda PRIVATE "-arch=sm_61" )
