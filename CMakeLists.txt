@@ -67,3 +67,13 @@ endforeach()
 
 add_executable(loop1_cuda loop1_cuda.cu)
 target_compile_options(loop1_cuda PRIVATE "-arch=sm_61" )
+
+add_executable(laplace_opencl laplace_opencl.cpp)
+target_compile_options(laplace_opencl PRIVATE ${base_compile_options1})
+target_compile_options(laplace_opencl PRIVATE "-DBUF_TYPE=float")
+set_target_properties(laplace_opencl PROPERTIES LINK_FLAGS "-lOpenCL")
+
+add_executable(laplace_cuda laplace_cuda.cu)
+target_compile_options(laplace_cuda PRIVATE ${base_compile_option1})
+target_compile_options(laplace_cuda PRIVATE "-DBUF_TYPE=float")
+target_compile_options(laplace_cuda PRIVATE "-arch=sm_61" )
