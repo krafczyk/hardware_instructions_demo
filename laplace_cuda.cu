@@ -94,6 +94,7 @@ int main(int argc, char** argv) {
     total_length = side_length*side_length;
     CudaWrap(cudaMallocManaged(&t1, side_length*side_length*sizeof(BUF_TYPE)));
     CudaWrap(cudaMallocManaged(&t2, side_length*side_length*sizeof(BUF_TYPE)));
+
     for (size_t i = 0; i < total_length; ++i) {
         t1[i] = 0.;
         t2[i] = 0.;
@@ -112,8 +113,6 @@ int main(int argc, char** argv) {
         int blockSize = 256;
         int numBlocks = (total_length+blockSize-1)/(blockSize);
         SimKernel<<<numBlocks,blockSize>>>(t1, t2, side_length, alpha, dx);
-        // Synchronize GPU
-        cudaDeviceSynchronize();
 
         // Swap buffers
         BUF_TYPE* ttemp = t1;
@@ -123,6 +122,8 @@ int main(int argc, char** argv) {
         // Iterate time
         t += dt;
     }
+
+    CudaWrap(cudaDeviceSynchronize());
 
     auto stop = std::chrono::high_resolution_clock::now();
 
