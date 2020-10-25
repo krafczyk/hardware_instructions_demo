@@ -127,7 +127,6 @@ int main(int argc, char** argv) {
     //std::cout << "Program:" << std::endl;
     //std::cout << sim_kernel_program << std::endl;
 
-	/*
     // Initialize Device
     cl::Device device_to_use;
     if (gpu) {
@@ -306,6 +305,7 @@ int main(int argc, char** argv) {
 
     std::cout << "Read Buffer out" << std::endl;
 
+    /*
     // Now we have the result.
     BUF_TYPE buf_max = 0.;
     BUF_TYPE avg = 0.;
@@ -325,8 +325,8 @@ int main(int argc, char** argv) {
     std::cout << "Final time: " << t << std::endl;
     std::cout << "Max value: " << buf_max << std::endl;
     std::cout << "Average value: " << avg << std::endl;
+    */
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop-start);
     std::cout << "Took " << (duration.count()/((BUF_TYPE)N)) << " milliseconds per iteration" << std::endl;
-    */
     return 0;
 }
