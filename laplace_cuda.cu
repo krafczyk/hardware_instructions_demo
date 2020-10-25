@@ -92,8 +92,8 @@ int main(int argc, char** argv) {
 
     // Allocate and Initialize buffers
     total_length = side_length*side_length;
-    CudaWrap(cudaMallocManaged(&t1, side_length*side_length*sizeof(BUF_TYPE)));
-    CudaWrap(cudaMallocManaged(&t2, side_length*side_length*sizeof(BUF_TYPE)));
+    CudaWrap(cudaMallocManaged(&t1, total_length*sizeof(BUF_TYPE)));
+    CudaWrap(cudaMallocManaged(&t2, total_length*sizeof(BUF_TYPE)));
 
     for (size_t i = 0; i < total_length; ++i) {
         t1[i] = 0.;
