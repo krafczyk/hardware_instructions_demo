@@ -21,7 +21,7 @@ void SimKernel(BUF_TYPE* in_buf, BUF_TYPE* out_buf, const size_t i, const size_t
         const BUF_TYPE down = in_buf[Idx(x_i, y_i+1, side_length)];
         const BUF_TYPE left = in_buf[Idx(x_i-1, y_i, side_length)];
         const BUF_TYPE right = in_buf[Idx(x_i+1, y_i, side_length)];
-        const BUF_TYPE center = in_buf[Idx(x_i, y_i, side_length)];
+        const BUF_TYPE center = in_buf[i];
         const BUF_TYPE lap = (up+down+left+right-4*center)/(dx*dx);
         const BUF_TYPE tdiff = alpha*lap;
         // Compute update
