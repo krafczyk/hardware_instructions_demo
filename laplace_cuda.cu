@@ -47,7 +47,6 @@ void SimKernel(BUF_TYPE* in_buf, BUF_TYPE* out_buf, const size_t side_length, co
 
 int main(int argc, char** argv) {
     const size_t mb_size = 1 << 20;
-    //size_t target_buf_size = 1 << 10;
     size_t target_buf_size = 1 << 7;
 
     // Alpha constant
@@ -85,23 +84,23 @@ int main(int argc, char** argv) {
     std::cout << "Full side length: " << side_length << std::endl;
     size_t lattice_length = side_length-2;
     std::cout << "lattice side length: " << lattice_length << std::endl;
-    size_t total_length = 0;
-
-    BUF_TYPE* t1 = nullptr;
-    BUF_TYPE* t2 = nullptr;
+    size_t total_length = side_length*side_length;
+    std::cout << "Total elements: " << total_length << std::endl;
+    std::cout << "Size of one buffer: " << total_length*sizeof(BUF_TYPE) << " bytes." << std::endl;
 
     // Allocate and Initialize buffers
-    total_length = side_length*side_length;
-    CudaWrap(cudaMallocManaged(&t1, total_length*sizeof(BUF_TYPE)));
-    CudaWrap(cudaMallocManaged(&t2, total_length*sizeof(BUF_TYPE)));
-
+    BUF_TYPE* t1 = new BUF_TYPE[total_length];
     for (size_t i = 0; i < total_length; ++i) {
         t1[i] = 0.;
-        t2[i] = 0.;
     }
-   
     // Initial conditions May not be directly in the middle.
     t1[Idx(side_length/2,side_length/2, side_length)] = 100.;       
+ 
+    BUF_TYPE* dev_1 = nullptr;
+    BUF_TYPE* dev_2 = nullptr;
+    CudaWrap(cudaMalloc(&dev_1, total_length*sizeof(BUF_TYPE)));
+    CudaWrap(cudaMalloc(&dev_2, total_length*sizeof(BUF_TYPE)));
+    CudaWrap(cudaMemcpy(dev_1, t1, total_length*sizeof(BUF_TYPE), cudaMemcpyHostToDevice));
 
     std::cout << "Start simulation" << std::endl;
 
@@ -112,18 +111,20 @@ int main(int argc, char** argv) {
         // We don't go from beginning to end of array to simplify logic.
         int blockSize = 256;
         int numBlocks = (total_length+blockSize-1)/(blockSize);
-        SimKernel<<<numBlocks,blockSize>>>(t1, t2, side_length, alpha, dx);
+        SimKernel<<<numBlocks,blockSize>>>(dev_1, dev_2, side_length, alpha, dx);
 
         // Swap buffers
-        BUF_TYPE* ttemp = t1;
-        t1 = t2;
-        t2 = ttemp;
+        BUF_TYPE* dev_temp = dev_1;
+        dev_1 = dev_2;
+        dev_2 = dev_temp;
 
         // Iterate time
         t += dt;
     }
-
+    
+    // Copy result out
     CudaWrap(cudaDeviceSynchronize());
+    CudaWrap(cudaMemcpy(t1, dev_1, total_length*sizeof(BUF_TYPE), cudaMemcpyDeviceToHost));
 
     auto stop = std::chrono::high_resolution_clock::now();
 
@@ -141,8 +142,10 @@ int main(int argc, char** argv) {
     }
     avg = avg/((BUF_TYPE)(lattice_length*lattice_length));
 
-    cudaFree(t1);
-    cudaFree(t2);
+    cudaFree(dev_1);
+    cudaFree(dev_2);
+
+    delete [] t1;
 
     std::cout << "Number of steps taken: " << N << std::endl;
     std::cout << "Final time: " << t << std::endl;

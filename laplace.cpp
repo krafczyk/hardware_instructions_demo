@@ -31,7 +31,6 @@ void SimKernel(BUF_TYPE* in_buf, BUF_TYPE* out_buf, const size_t i, const size_t
 
 int main(int argc, char** argv) {
     const size_t mb_size = 1 << 20;
-    //size_t target_buf_size = 1 << 10;
     size_t target_buf_size = 1 << 7;
 
     // Alpha constant
@@ -69,20 +68,16 @@ int main(int argc, char** argv) {
     std::cout << "Full side length: " << side_length << std::endl;
     size_t lattice_length = side_length-2;
     std::cout << "lattice side length: " << lattice_length << std::endl;
-    size_t total_length = 0;
+    size_t total_length = side_length*side_length;
+    std::cout << "Total elements: " << total_length << std::endl;
+    std::cout << "Size of one buffer: " << total_length*sizeof(BUF_TYPE) << " bytes." << std::endl;
 
-    BUF_TYPE* t1 = nullptr;
-    BUF_TYPE* t2 = nullptr;
-
+    BUF_TYPE* t1 = new BUF_TYPE[total_length];
+    BUF_TYPE* t2 = new BUF_TYPE[total_length];
     // Initializing buffers
-    total_length = side_length*side_length;
-    t1 = new BUF_TYPE[side_length*side_length];
-    t2 = new BUF_TYPE[side_length*side_length];
     for (size_t i = 0; i < total_length; ++i) {
         t1[i] = 0.;
-        t2[i] = 0.;
     }
-   
     // Initial conditions May not be directly in the middle.
     t1[Idx(side_length/2,side_length/2, side_length)] = 100.;       
 
