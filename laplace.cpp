@@ -88,6 +88,8 @@ int main(int argc, char** argv) {
     BUF_TYPE t = 0.;
     for(size_t t_i=0; t_i < N; ++t_i) {
         // We don't go from beginning to end of array to simplify logic.
+		#pragma omp parallel
+		#pragma omp for
         for(size_t i = 0; i < total_length; ++i) {
             SimKernel(t1, t2, i, side_length, alpha, dx);
         }
