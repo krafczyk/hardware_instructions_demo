@@ -1,24 +1,204 @@
 #ifndef OPENCL_HELPER_HDR
 #define OPENCL_HELPER_HDR
 
+#define CL_TARGET_OPENCL_VERSION 220
 #include <CL/cl.h>
 
 #include <iostream>
 #include <vector>
+#include <map>
+#include "unistd.h"
 
-//std::vector<cl::Device> get_devices(const cl_device_type dev_type) {
-//    std::vector<cl::Platform> all_platforms;
-//    cl::Platform::get(&all_platforms);
-//    std::vector<cl::Device> all_gpu_devices;
-//    for (auto& p: all_platforms) {
-//        std::vector<cl::Device> gpu_devices;
-//        cl_int ret = p.getDevices(dev_type, &gpu_devices);
-//        if (ret == CL_SUCCESS) {
-//            all_gpu_devices.insert(all_gpu_devices.end(), gpu_devices.begin(), gpu_devices.end());
-//        }
-//    }
-//    return all_gpu_devices;
-//}
+std::vector<cl_device_id> get_devices(const cl_device_type dev_type, cl_int* ret) {
+	std::vector<cl_device_id> devices;
+	cl_uint num_platforms = 0;
+	(*ret) = clGetPlatformIDs(0, NULL, &num_platforms);
+	if (*ret != CL_SUCCESS) {
+		std::cerr << "Error getting number of platforms!" << std::endl;
+		return devices;
+	}
+	cl_platform_id* platforms = new cl_platform_id[num_platforms];
+	(*ret) = clGetPlatformIDs(num_platforms, platforms, NULL);
+	if (*ret != CL_SUCCESS) {
+		std::cerr << "Error getting platform Ids!" << std::endl;
+		delete [] platforms;
+		return devices;
+	}
+	for (cl_uint plat_i = 0 ; plat_i < num_platforms; ++plat_i) {
+		auto platform_id = platforms[plat_i];
+		cl_uint num_devices = 0;
+		(*ret) = clGetDeviceIDs(platform_id, dev_type, 0, NULL, &num_devices);
+		if (*ret == CL_DEVICE_NOT_FOUND) {
+			// Didin't find any devices of the specified type.
+			continue;
+		}
+		if (*ret != CL_SUCCESS) {
+			std::cerr << "Error getting number of devices on platform" << std::endl;
+			delete [] platforms;
+			return devices;
+		}
+		cl_device_id* device_list = new cl_device_id[num_devices];
+		(*ret) = clGetDeviceIDs(platform_id, dev_type, num_devices, device_list, NULL);
+		if (*ret != CL_SUCCESS) {
+			std::cerr << "Error getting devices on platform" << std::endl;
+			delete [] platforms;
+			delete [] device_list;
+			return devices;
+		}
+		for(cl_uint dev_i = 0; dev_i < num_devices; ++dev_i) {
+			auto device_id = device_list[dev_i];
+			devices.push_back(device_id);
+		}
+		delete [] device_list;
+	}
+	delete [] platforms;
+
+	*ret = CL_SUCCESS;
+	return devices;
+}
+
+std::vector<cl_device_id> get_devices_full(bool gpu, cl_int* ret) {
+	std::vector<cl_device_id> device_container;
+	if (gpu) {
+		auto devices = get_devices(CL_DEVICE_TYPE_GPU, ret);
+		if (*ret != CL_SUCCESS) {
+			std::cerr << "Problem getting GPU devices!" << std::endl;
+			return device_container;
+		} else {
+			const size_t hostname_len = 1024;
+        	char hostname[hostname_len];
+			gethostname(hostname, hostname_len);
+        	if(std::string(hostname) == "schumann") {
+            	for (auto& d: devices) {
+                	cl_int pci_bus_id = 0;
+                	const cl_device_info CL_DEVICE_PCI_BUS_ID_NV = 0x4008;
+					(*ret) = clGetDeviceInfo(d, CL_DEVICE_PCI_BUS_ID_NV, sizeof(cl_int), &pci_bus_id, NULL);
+                	if (ret != CL_SUCCESS) {
+                    	std::cerr << "There was a problem getting the GPU BUS Id!" << std::endl;
+                    	return device_container;
+                	}
+                	if (pci_bus_id == 3) {
+						device_container.push_back(d);
+						return device_container;
+                	}
+            	}
+				device_container.push_back(devices[0]);
+				return device_container;
+        	} else {
+				device_container.push_back(devices[0]);
+				return device_container;
+        	}
+		}
+		std::cerr << "There was a problem finding a GPU!" << std::endl;
+		return device_container;
+	} else {
+		auto devices = get_devices(CL_DEVICE_TYPE_CPU, ret);
+		if (*ret != CL_SUCCESS) {
+			std::cerr << "Problem getting CPU devices!" << std::endl;
+			return device_container;
+		} else {
+			device_container.push_back(devices[0]);
+			return device_container;
+		}
+	}
+}
+
+typedef std::pair<cl_platform_id,std::vector<cl_device_id>> platform_device_pair_t;
+platform_device_pair_t get_devices_and_platform(cl_device_type dev_type, bool all_devices, cl_int* ret) {
+	platform_device_pair_t result;
+	std::vector<cl_device_id> device_container;
+	// First, get platforms.
+	std::map<cl_platform_id, cl_uint> number_of_appropriate_devices;
+	cl_uint num_platforms = 0;
+	(*ret) = clGetPlatformIDs(0, NULL, &num_platforms);
+	if (*ret != CL_SUCCESS) {
+		std::cerr << "Problem getting number of platforms." << std::endl;
+		return result;
+	}
+
+	cl_platform_id* platforms = new cl_platform_id[num_platforms];
+	(*ret) = clGetPlatformIDs(num_platforms, platforms, NULL);
+	if (*ret != CL_SUCCESS) {
+		std::cerr << "Problem getting the platforms." << std::endl;
+		return result;
+	}
+	for (cl_uint plat_i = 0; plat_i < num_platforms; ++plat_i) {
+		// Get number of devices on each platform.
+		auto platform = platforms[plat_i];
+		cl_uint num_devices = 0;
+		(*ret) = clGetDeviceIDs(platform, dev_type, 0, NULL, &num_devices);
+		if (*ret == CL_SUCCESS) {
+			number_of_appropriate_devices[platform] = num_devices;
+		} else if (*ret == CL_DEVICE_NOT_FOUND) {
+			number_of_appropriate_devices[platform] = 0;
+		} else {
+			std::cerr << "Problem getting a device listing." << std::endl;
+			return result;
+		}
+	}
+	// Cleanup after ourselves
+	delete [] platforms;
+
+	cl_platform_id device_platform = 0;
+	cl_uint num_devices = 0;
+	for(auto element: number_of_appropriate_devices) {
+		if (element.second > num_devices) {
+			device_platform = element.first;
+			num_devices = element.second;
+		}
+	}
+
+	if (num_devices == 0) {
+		std::cerr << "No devices for some reason!" << std::endl;
+		return result;
+	}
+
+	// Get devices for the platform
+	std::vector<cl_device_id> platform_devices;
+	cl_device_id* devices = new cl_device_id[num_devices];
+	*ret = clGetDeviceIDs(device_platform, dev_type, num_devices, devices, 0);
+	if(*ret != CL_SUCCESS) {
+		std::cerr << "There was a problem listing devices" << std::endl;
+		delete [] devices;
+		return result;
+	}
+	for(size_t dev_i = 0; dev_i < num_devices; ++dev_i) {
+		auto device = devices[dev_i];
+		platform_devices.push_back(device);
+	}
+	delete [] devices;
+
+	if (all_devices) {
+		return platform_device_pair_t(device_platform, platform_devices);
+	} else {
+		std::vector<cl_device_id> device_container;
+		if (dev_type == CL_DEVICE_TYPE_GPU) {
+			const size_t hostname_len = 1024;
+        	char hostname[hostname_len];
+			gethostname(hostname, hostname_len);
+        	if(std::string(hostname) == "schumann") {
+            	for (auto& d: platform_devices) {
+                	cl_int pci_bus_id = 0;
+                	const cl_device_info CL_DEVICE_PCI_BUS_ID_NV = 0x4008;
+					(*ret) = clGetDeviceInfo(d, CL_DEVICE_PCI_BUS_ID_NV, sizeof(cl_int), &pci_bus_id, NULL);
+                	if (ret != CL_SUCCESS) {
+                    	std::cerr << "There was a problem getting the GPU BUS Id!" << std::endl;
+                    	return result;
+                	}
+                	if (pci_bus_id == 3) {
+						device_container.push_back(d);
+						return platform_device_pair_t(device_platform, device_container);
+                	}
+            	}
+				device_container.push_back(devices[0]);
+				return platform_device_pair_t(device_platform, device_container);
+			}
+		}
+		// Otherwise, grab first device.
+		device_container.push_back(platform_devices[0]);
+		return platform_device_pair_t(device_platform, device_container);
+	}
+}
 
 #define CaseReturnString(x) case x: return #x;
 

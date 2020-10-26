@@ -89,10 +89,12 @@ int main(int argc, char** argv) {
     size_t N = 10;
 
     bool gpu = false;
+	bool all = false;
 
     ArgParse::ArgParser Parser("Laplace simulation CPU");
     Parser.AddArgument("-size/--buf-size", "Target size of buffers in MB.", &target_buf_size);
     Parser.AddArgument("-gpu", "Indicate you'd like to use a GPU, otherwise it'll use a cpu.", &gpu);
+	Parser.AddArgument("-all", "Indicate you'd like to use all devices in the selected platform.", &all);
 
     if (Parser.ParseArgs(argc, argv) != 0) {
         std::cout << "Problem parsing arguments!" << std::endl;
@@ -102,6 +104,11 @@ int main(int argc, char** argv) {
     if (Parser.HelpPrinted()) {
         return 0;
     }
+
+	if (all) {
+		std::cerr << "Using all devices on a platform is currently not supported." << std::endl;
+		return 1;
+	}
 
     std::cout << "Simulation Parameters" << std::endl;
     std::cout << "alpha: " << alpha << std::endl;
@@ -122,96 +129,81 @@ int main(int argc, char** argv) {
     std::cout << "Size of one buffer: " << total_length*sizeof(BUF_TYPE) << " bytes." << std::endl;
 
     // Produce kernel program
-    std::string sim_kernel_program = produce_sim_kernel_code(side_length, alpha, dx);
+    std::string sim_kernel_program_code = produce_sim_kernel_code(side_length, alpha, dx);
 
-    //std::cout << "Program:" << std::endl;
-    //std::cout << sim_kernel_program << std::endl;
+    std::cout << "Program Code:" << std::endl;
+    std::cout << sim_kernel_program_code << std::endl;
 
-	/*
-    // Initialize Device
-    cl::Device device_to_use;
-    if (gpu) {
-        auto gpu_devices = get_devices(CL_DEVICE_TYPE_GPU);
-        if (gpu_devices.size() == 0) {
-            std::cerr << "No GPUs available!" << std::endl;
-            return 1;
-        }
-        if (gpu_devices.size() == 1) {
-            device_to_use = gpu_devices[0];
-        }
-        const size_t hostname_len = 1024;
-        char hostname[hostname_len];
-        gethostname(hostname, hostname_len);
-        bool set_device = false;
-        if(std::string(hostname) == "schumann") {
-            for (auto& d: gpu_devices) {
-                cl_int pci_bus_id = 0;
-                const cl_device_info CL_DEVICE_PCI_BUS_ID_NV = 0x4008;
-                cl_int ret = 0;
-                ret = d.getInfo(CL_DEVICE_PCI_BUS_ID_NV, &pci_bus_id);
-                if (ret != CL_SUCCESS) {
-                    std::cerr << "There was a problem getting the GPU BUS Id!" << std::endl;
-                    return 1;
-                }
-                if (pci_bus_id == 3) {
-                    device_to_use = d;
-                    set_device = true;
-                }
-            }
-        } else {
-            device_to_use = gpu_devices[0];
-            set_device = true;
-        }
-        if (!set_device) {
-            std::cerr << "Couldn't set the GPU device!" << std::endl;
-        } else {
-            std::cout << "Selected GPU device!" << std::endl;
-        }
-    } else {
-        auto cpu_devices = get_devices(CL_DEVICE_TYPE_CPU);
-        if (cpu_devices.size() == 0) {
-            std::cerr << "No suitable CPUs available" << std::endl;
-        } else {
-            device_to_use = cpu_devices[0];
-        }
-        std::cout << "Select CPU device!" << std::endl;
-    }
-
-    std::cout << "Device chosen" << std::endl;
 
 	cl_int ret = 0;
-
-    // Create OpenCL context
-    std::vector<cl::Device> device_container;
-    device_container.push_back(device_to_use);
-
-    std::cout << "Create Context" << std::endl;
-    cl::Context context(device_container);
-    std::cout << "Context created" << std::endl;
-
-	auto num_devices = context.getInfo<CL_CONTEXT_REFERENCE_COUNT>(&ret);
+	platform_device_pair_t pd;
+	if (gpu) {
+		pd = get_devices_and_platform(CL_DEVICE_TYPE_GPU, all, &ret);
+	} else {
+		pd = get_devices_and_platform(CL_DEVICE_TYPE_CPU, all, &ret);
+	}
 	if (ret != CL_SUCCESS) {
-		std::cerr << "Problem getting context information!" << std::endl;
+		std::cerr << "Error getting devices." << std::endl;
 		std::cerr << opencl_errstr(ret) << std::endl;
 		return 1;
-	} else {
-		std::cout << "There are " << num_devices << " references in this context!" << std::endl;
 	}
-	
+	if (pd.second.size() == 0) {
+		std::cerr << "Didn't find any devices matching request!" << std::endl;
+		return 1;
+	}
 
-    // Build program on our context
-    cl::Program simProgram(context, sim_kernel_program);
+    std::cout << "Device and Platform chosen" << std::endl;
+
+    std::cout << "Create Context" << std::endl;
+	cl_context_properties props[3];
+	props[0] = CL_CONTEXT_PLATFORM;
+	props[1] = (cl_context_properties) pd.first;
+	props[2] = 0;
+	cl_context context = clCreateContext(props, pd.second.size(), pd.second.data(), NULL, NULL, &ret);
+	if(ret != CL_SUCCESS) {
+		std::cerr << "Problem creating context!" << std::endl;
+		std::cerr << opencl_errstr(ret) << std::endl;
+		return 1;
+	}	
+    std::cout << "Context created" << std::endl;
+
+    // Check context was created successfully.
+	//cl_uint num = 0;
+	//ret = clGetContextInfo(context, CL_CONTEXT_NUM_DEVICES, sizeof(cl_uint), &num, NULL);
+	//if (ret != CL_SUCCESS) {
+	//	std::cerr << "Problem getting context information!" << std::endl;
+	//	std::cerr << opencl_errstr(ret) << std::endl;
+	//	return 1;
+	//} else {
+	//	std::cout << "There are " << num << " devices in this context!" << std::endl;
+	//}
+
+	std::cout << "Create program object" << std::endl;
+	const char* source = sim_kernel_program_code.c_str();
+	cl_program sim_kernel_program = clCreateProgramWithSource(context, 1, &source, NULL, &ret);
+	if (ret != CL_SUCCESS) {
+		std::cerr << "Problem building code!" << std::endl;
+		std::cerr << opencl_errstr(ret) << std::endl;
+		return 1;
+	}
+
     std::cout << "Start program build" << std::endl;
-    ret = simProgram.build();
-    if(ret != CL_SUCCESS) {
-        std::cerr << "Problem building OpenCL Program!" << std::endl;
-        cl_int buildErr = CL_SUCCESS;
-        auto buildInfo = simProgram.getBuildInfo<CL_PROGRAM_BUILD_LOG>(&buildErr);
-        for (auto& pair: buildInfo) {
-            std::cerr << pair.second << std::endl << std::endl;
-        }
-        return 1;
-    }
+	ret = clBuildProgram(sim_kernel_program, pd.second.size(), pd.second.data(), NULL, NULL, NULL);
+	if(ret != CL_SUCCESS) {
+		std::cerr << "There was a problem building the program!" << std::endl;
+		std::cerr << opencl_errstr(ret) << std::endl;
+		const size_t log_len = 1024;
+		char log[log_len];
+		ret = clGetProgramBuildInfo(sim_kernel_program, pd.second[0], CL_PROGRAM_BUILD_LOG, log_len, log, NULL);
+		if (ret != CL_SUCCESS) {
+			std::cerr << "Couldn't get build log!" << std::endl;
+			std::cerr << opencl_errstr(ret) << std::endl;
+			return 1;
+		}
+		std::cerr << "Build Log: " << std::endl;
+		std::cerr << log << std::endl;
+		return 1;
+	}
     std::cout << "Program Built" << std::endl;
 
     BUF_TYPE* t1 = nullptr;
@@ -226,59 +218,93 @@ int main(int argc, char** argv) {
     t1[Idx(side_length/2,side_length/2, side_length)] = 100.;       
 
     // Allocate buffers
-    cl::Buffer t1_buf_obj(context, CL_MEM_READ_WRITE, total_length*sizeof(BUF_TYPE), NULL, &ret);
+    cl_mem t1_buf = clCreateBuffer(context, CL_MEM_READ_WRITE, total_length*sizeof(BUF_TYPE), NULL, &ret);
     if(ret != CL_SUCCESS) {
         std::cerr << "Error allocating buffer!" << std::endl;
 		std::cerr << opencl_errstr(ret) << std::endl;
         return 1;
     }
-    cl::Buffer t2_buf_obj(context, CL_MEM_READ_WRITE, total_length*sizeof(BUF_TYPE), NULL, &ret);
+    __attribute__((unused)) cl_mem t2_buf = clCreateBuffer(context, CL_MEM_READ_WRITE, total_length*sizeof(BUF_TYPE), NULL, &ret);
     if(ret != CL_SUCCESS) {
         std::cerr << "Error allocating buffer!" << std::endl;
 		std::cerr << opencl_errstr(ret) << std::endl;
         return 1;
     }
 
-    cl::CommandQueue command_queue(context, 0, &ret);
+    cl_command_queue command_queue = clCreateCommandQueueWithProperties(context, pd.second[0], NULL, &ret);
 	if (ret != CL_SUCCESS) {
 		std::cerr << "Error creating command queue" << std::endl;
 		std::cerr << opencl_errstr(ret) << std::endl;
 		return 1;
 	}
 
-	auto queue_info = command_queue.getInfo<CL_QUEUE_SIZE>(&ret);
-	if (ret != CL_SUCCESS) {
-		std::cerr << "Error finding out info about the command queue" << std::endl;
-		std::cerr << opencl_errstr(ret) << std::endl;
-	} else {
-		std::cout << "Queue size: " << queue_info << std::endl;
-	}
+	//cl_uint queue_info = 0;
+	//ret = clGetCommandQueueInfo(command_queue, CL_QUEUE_REFERENCE_COUNT, sizeof(cl_uint), &queue_info, 0);
+	//if (ret != CL_SUCCESS) {
+	//	std::cerr << "Error finding out info about the command queue" << std::endl;
+	//	std::cerr << opencl_errstr(ret) << std::endl;
+	//} else {
+	//	std::cout << "Queue size: " << queue_info << std::endl;
+	//}
 
-    ret = command_queue.enqueueWriteBuffer(t1_buf_obj, CL_TRUE, 0, total_length*sizeof(BUF_TYPE), t1);
+    ret = clEnqueueWriteBuffer(command_queue, t1_buf, CL_TRUE, 0, total_length*sizeof(BUF_TYPE), t1, 0, NULL, NULL);
     if(ret != CL_SUCCESS) {
         std::cerr << "Error queue write buffer" << std::endl;
 		std::cerr << opencl_errstr(ret) << std::endl;
         return 1;
     }
 
-    cl::Kernel kernel_first(simProgram, "sim_kernel");
-    kernel_first.setArg(0, t1_buf_obj.get());
-    kernel_first.setArg(1, t2_buf_obj.get());
+    cl_kernel kernel_first = clCreateKernel(sim_kernel_program, "sim_kernel", &ret);
+	if(ret != CL_SUCCESS) {
+		std::cerr << "Error creating kernel" << std::endl;
+		std::cerr << opencl_errstr(ret) << std::endl;
+		return 1;
+	}
+	ret = clSetKernelArg(kernel_first, 0, sizeof(cl_mem), &t1_buf);
+	if (ret != CL_SUCCESS) {
+		std::cerr << "Error setting kernel arg" << std::endl;
+		std::cerr << opencl_errstr(ret) << std::endl;
+		return 1;
+	}
+	ret = clSetKernelArg(kernel_first, 1, sizeof(cl_mem), &t2_buf);
+	if (ret != CL_SUCCESS) {
+		std::cerr << "Error setting kernel arg" << std::endl;
+		std::cerr << opencl_errstr(ret) << std::endl;
+		return 1;
+	}
 
-    cl::Kernel kernel_second(simProgram, "sim_kernel");
-    kernel_second.setArg(0, t2_buf_obj.get());
-    kernel_second.setArg(1, t1_buf_obj.get());
+    cl_kernel kernel_second = clCreateKernel(sim_kernel_program, "sim_kernel", &ret);
+	if(ret != CL_SUCCESS) {
+		std::cerr << "Error creating kernel" << std::endl;
+		std::cerr << opencl_errstr(ret) << std::endl;
+		return 1;
+	}
+   	ret = clSetKernelArg(kernel_first, 0, sizeof(cl_mem), &t2_buf);
+	if (ret != CL_SUCCESS) {
+		std::cerr << "Error setting kernel arg" << std::endl;
+		std::cerr << opencl_errstr(ret) << std::endl;
+		return 1;
+	}
+	ret = clSetKernelArg(kernel_first, 1, sizeof(cl_mem), &t1_buf);
+	if (ret != CL_SUCCESS) {
+		std::cerr << "Error setting kernel arg" << std::endl;
+		std::cerr << opencl_errstr(ret) << std::endl;
+		return 1;
+	}
 
-    std::vector<cl::Kernel> kernels = { kernel_first, kernel_second };
+    cl_kernel kernels[2] = { kernel_first, kernel_second };
 
     std::cout << "Start simulation" << std::endl;
 
     auto start = std::chrono::high_resolution_clock::now();
 
     BUF_TYPE t = 0.;
+	size_t global_work_size[1] = {total_length};
+	size_t local_work_size[1] = {256};
     for(size_t t_i=0; t_i < N; ++t_i) {
+		std::cout << "Iteration" << std::endl;
         // We don't go from beginning to end of array to simplify logic.
-        ret = command_queue.enqueueNDRangeKernel(kernels[t_i%2], cl::NullRange, cl::NDRange(total_length));
+        ret = clEnqueueNDRangeKernel(command_queue, kernels[t_i%2], 1, NULL, global_work_size, local_work_size, 0, NULL, NULL);
         if (ret != CL_SUCCESS) {
             std::cerr << "Error queuing kernel!" << std::endl;
 			std::cerr << opencl_errstr(ret) << std::endl;
@@ -294,9 +320,9 @@ int main(int argc, char** argv) {
     std::cout << "Simulation Finished." << std::endl;
 
     if (N%2 == 1) {
-        ret = command_queue.enqueueReadBuffer(t2_buf_obj, CL_TRUE, 0, total_length*sizeof(BUF_TYPE), t1);
+        ret = clEnqueueReadBuffer(command_queue, t2_buf, CL_TRUE, 0, total_length*sizeof(BUF_TYPE), t1, 0, NULL, NULL);
     } else {
-        ret = command_queue.enqueueReadBuffer(t1_buf_obj, CL_TRUE, 0, total_length*sizeof(BUF_TYPE), t1);
+        ret = clEnqueueReadBuffer(command_queue, t1_buf, CL_TRUE, 0, total_length*sizeof(BUF_TYPE), t1, 0, NULL, NULL);
     }
     if (ret != CL_SUCCESS) {
         std::cerr << "Error reading final buffer!" << std::endl;
@@ -319,7 +345,6 @@ int main(int argc, char** argv) {
     avg = avg/((BUF_TYPE)(lattice_length*lattice_length));
 
     delete [] t1;
-    delete [] t2;
 
     std::cout << "Number of steps taken: " << N << std::endl;
     std::cout << "Final time: " << t << std::endl;
@@ -327,6 +352,6 @@ int main(int argc, char** argv) {
     std::cout << "Average value: " << avg << std::endl;
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop-start);
     std::cout << "Took " << (duration.count()/((BUF_TYPE)N)) << " milliseconds per iteration" << std::endl;
-    */
     return 0;
+
 }
