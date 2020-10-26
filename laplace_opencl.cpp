@@ -18,14 +18,6 @@ inline size_t Idx(const size_t x, const size_t y, const size_t len) {
     return x+(y*len);
 }
 
-std::string add_arrays_kernel = R"CODE(__kernel void array_add(__global const float* A, __global const float* B, __global float* C) {
-    // Get the index of the current element to be processed
-    int i = get_global_id(0);
-
-    // Do the operation
-    C[i] = A[i] + B[i];
-})CODE";
-
 std::string produce_sim_kernel_code(const size_t side_length, const BUF_TYPE alpha, const BUF_TYPE dx) {
     std::stringstream ss;
     std::string buf_type_string = typeid(BUF_TYPE).name();
@@ -57,22 +49,6 @@ std::string produce_sim_kernel_code(const size_t side_length, const BUF_TYPE alp
     ss << "}" << std::endl;
     return ss.str();
 }
-
-//std::string sim_kernel = R"CODE(__kernel void sim_kernel(__global const BUF_TYPE* in_buf, __global const BUF_TYPE* out_buf, const size_t i, const size_t side_length, const BUF_TYPE alpha, const BUF_TYPE dx) {
-//    const size_t y_i = i/side_length;
-//    const size_t x_i = i-(y_i*side_length);
-//    if ((x_i > 0)&&(x_i < side_length-1)&&(y_i > 0)&&(y_i < side_length-1)) {
-//        const BUF_TYPE up = in_buf[Idx(x_i, y_i-1, side_length)];
-//        const BUF_TYPE down = in_buf[Idx(x_i, y_i+1, side_length)];
-//        const BUF_TYPE left = in_buf[Idx(x_i-1, y_i, side_length)];
-//        const BUF_TYPE right = in_buf[Idx(x_i+1, y_i, side_length)];
-//        const BUF_TYPE center = in_buf[Idx(x_i, y_i, side_length)];
-//        const BUF_TYPE lap = (up+down+left+right-4*center)/(dx*dx);
-//        const BUF_TYPE tdiff = alpha*lap;
-//        // Compute update
-//        out_buf[i] = in_buf[i]+tdiff;
-//    }
-//})CODE";
 
 int main(int argc, char** argv) {
     const size_t mb_size = 1 << 20;
@@ -131,9 +107,8 @@ int main(int argc, char** argv) {
     // Produce kernel program
     std::string sim_kernel_program_code = produce_sim_kernel_code(side_length, alpha, dx);
 
-    std::cout << "Program Code:" << std::endl;
-    std::cout << sim_kernel_program_code << std::endl;
-
+    //std::cout << "Program Code:" << std::endl;
+    //std::cout << sim_kernel_program_code << std::endl;
 
 	cl_int ret = 0;
 	platform_device_pair_t pd;
@@ -166,17 +141,6 @@ int main(int argc, char** argv) {
 		return 1;
 	}	
     std::cout << "Context created" << std::endl;
-
-    // Check context was created successfully.
-	//cl_uint num = 0;
-	//ret = clGetContextInfo(context, CL_CONTEXT_NUM_DEVICES, sizeof(cl_uint), &num, NULL);
-	//if (ret != CL_SUCCESS) {
-	//	std::cerr << "Problem getting context information!" << std::endl;
-	//	std::cerr << opencl_errstr(ret) << std::endl;
-	//	return 1;
-	//} else {
-	//	std::cout << "There are " << num << " devices in this context!" << std::endl;
-	//}
 
 	std::cout << "Create program object" << std::endl;
 	const char* source = sim_kernel_program_code.c_str();
@@ -238,15 +202,6 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 
-	//cl_uint queue_info = 0;
-	//ret = clGetCommandQueueInfo(command_queue, CL_QUEUE_REFERENCE_COUNT, sizeof(cl_uint), &queue_info, 0);
-	//if (ret != CL_SUCCESS) {
-	//	std::cerr << "Error finding out info about the command queue" << std::endl;
-	//	std::cerr << opencl_errstr(ret) << std::endl;
-	//} else {
-	//	std::cout << "Queue size: " << queue_info << std::endl;
-	//}
-
     ret = clEnqueueWriteBuffer(command_queue, t1_buf, CL_TRUE, 0, total_length*sizeof(BUF_TYPE), t1, 0, NULL, NULL);
     if(ret != CL_SUCCESS) {
         std::cerr << "Error queue write buffer" << std::endl;
@@ -254,45 +209,12 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    cl_kernel kernel_first = clCreateKernel(sim_kernel_program, "sim_kernel", &ret);
+    cl_kernel sim_kernel = clCreateKernel(sim_kernel_program, "sim_kernel", &ret);
 	if(ret != CL_SUCCESS) {
 		std::cerr << "Error creating kernel" << std::endl;
 		std::cerr << opencl_errstr(ret) << std::endl;
 		return 1;
 	}
-	ret = clSetKernelArg(kernel_first, 0, sizeof(cl_mem), &t1_buf);
-	if (ret != CL_SUCCESS) {
-		std::cerr << "Error setting kernel arg" << std::endl;
-		std::cerr << opencl_errstr(ret) << std::endl;
-		return 1;
-	}
-	ret = clSetKernelArg(kernel_first, 1, sizeof(cl_mem), &t2_buf);
-	if (ret != CL_SUCCESS) {
-		std::cerr << "Error setting kernel arg" << std::endl;
-		std::cerr << opencl_errstr(ret) << std::endl;
-		return 1;
-	}
-
-    cl_kernel kernel_second = clCreateKernel(sim_kernel_program, "sim_kernel", &ret);
-	if(ret != CL_SUCCESS) {
-		std::cerr << "Error creating kernel" << std::endl;
-		std::cerr << opencl_errstr(ret) << std::endl;
-		return 1;
-	}
-   	ret = clSetKernelArg(kernel_first, 0, sizeof(cl_mem), &t2_buf);
-	if (ret != CL_SUCCESS) {
-		std::cerr << "Error setting kernel arg" << std::endl;
-		std::cerr << opencl_errstr(ret) << std::endl;
-		return 1;
-	}
-	ret = clSetKernelArg(kernel_first, 1, sizeof(cl_mem), &t1_buf);
-	if (ret != CL_SUCCESS) {
-		std::cerr << "Error setting kernel arg" << std::endl;
-		std::cerr << opencl_errstr(ret) << std::endl;
-		return 1;
-	}
-
-    cl_kernel kernels[2] = { kernel_first, kernel_second };
 
     std::cout << "Start simulation" << std::endl;
 
@@ -302,9 +224,30 @@ int main(int argc, char** argv) {
 	size_t global_work_size[1] = {total_length};
 	size_t local_work_size[1] = {256};
     for(size_t t_i=0; t_i < N; ++t_i) {
-		std::cout << "Iteration" << std::endl;
         // We don't go from beginning to end of array to simplify logic.
-        ret = clEnqueueNDRangeKernel(command_queue, kernels[t_i%2], 1, NULL, global_work_size, local_work_size, 0, NULL, NULL);
+
+		if (t_i%2 == 0) {
+			ret = clSetKernelArg(sim_kernel, 0, sizeof(cl_mem), &t1_buf);
+		} else {
+			ret = clSetKernelArg(sim_kernel, 0, sizeof(cl_mem), &t2_buf);
+		}
+		if (ret != CL_SUCCESS) {
+			std::cerr << "Error setting kernel arg" << std::endl;
+			std::cerr << opencl_errstr(ret) << std::endl;
+			return 1;
+		}
+		if (t_i%2 == 0) {
+			ret = clSetKernelArg(sim_kernel, 1, sizeof(cl_mem), &t2_buf);
+		} else {
+			ret = clSetKernelArg(sim_kernel, 1, sizeof(cl_mem), &t1_buf);
+		}
+		if (ret != CL_SUCCESS) {
+			std::cerr << "Error setting kernel arg" << std::endl;
+			std::cerr << opencl_errstr(ret) << std::endl;
+			return 1;
+		}
+
+        ret = clEnqueueNDRangeKernel(command_queue, sim_kernel, 1, NULL, global_work_size, local_work_size, 0, NULL, NULL);
         if (ret != CL_SUCCESS) {
             std::cerr << "Error queuing kernel!" << std::endl;
 			std::cerr << opencl_errstr(ret) << std::endl;
@@ -314,8 +257,6 @@ int main(int argc, char** argv) {
         // Iterate time
         t += dt;
     }
-
-    auto stop = std::chrono::high_resolution_clock::now();
 
     std::cout << "Simulation Finished." << std::endl;
 
@@ -329,6 +270,8 @@ int main(int argc, char** argv) {
 		std::cerr << opencl_errstr(ret) << std::endl;
         return 1;
     }
+
+    auto stop = std::chrono::high_resolution_clock::now();
 
     std::cout << "Read Buffer out" << std::endl;
 
