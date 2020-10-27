@@ -12,7 +12,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 set(buf_types "float" "double")
 
 # Set of base compile options
-set(base_compile_options1 "-std=c++11" "-Wall" "-Werror" "-Wextra")
+set(base_compile_options1 "-std=c++11" "-Wall" "-Werror" "-Wextra" "-fverbose-asm")
 set(omp_compile_options "-fopenmp")
 set(omp_link_options "-lgomp -lpthread")
 

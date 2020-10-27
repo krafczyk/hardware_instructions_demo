@@ -7,7 +7,7 @@
 #define BUF_TYPE float
 #endif
 
-void add_arrays(BUF_TYPE* array1, BUF_TYPE* array2, BUF_TYPE* array3, size_t N) {
+void add_arrays(const BUF_TYPE* array1, const BUF_TYPE* array2, BUF_TYPE* array3, size_t N) {
     for(size_t i=0; i < N; ++i) {
         array3[i] = array1[i]+array2[i];
     }
