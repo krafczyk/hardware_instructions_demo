@@ -13,10 +13,16 @@
 #define BUF_TYPE double
 #endif
 
-void add_arrays(const BUF_TYPE* array1, const BUF_TYPE* array2, BUF_TYPE* array3, size_t N) {
-    for(size_t i=0; i < N; ++i) {
-        array3[i] = array1[i]+array2[i];
-    }
+#include "mkl.h"
+
+void add_arrays(const BUF_TYPE* array1, BUF_TYPE* array2, size_t N) {
+    BUF_TYPE alpha = 1.0;
+    MKL_INT inc = 1;
+    #if(BUF_KIND == 0)
+    cblas_saxpy((MKL_INT)N, alpha, array1, inc, array2, inc);
+    #else
+    cblas_daxpy((MKL_INT)N, alpha, array1, inc, array2, inc);
+    #endif
 }
 
 int main() {
@@ -34,7 +40,6 @@ int main() {
 
     BUF_TYPE* array1 = new BUF_TYPE[num_gen];
     BUF_TYPE* array2 = new BUF_TYPE[num_gen];
-    BUF_TYPE* array3 = new BUF_TYPE[num_gen];
 
     // Fill arrays with values
     for(size_t i=0; i < num_gen; ++i) {
@@ -44,14 +49,14 @@ int main() {
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    add_arrays(array1, array2, array3, num_gen);
+    add_arrays(array1, array2, num_gen);
 
     auto stop = std::chrono::high_resolution_clock::now();
 
     // Do something with the arrays so the addition isn't optimized out.
     BUF_TYPE sum = 0.;
     for(size_t i=0; i < num_gen; ++i) {
-        sum += array3[i];
+        sum += array2[i];
     }
 
     std::cout << sum << std::endl;
@@ -64,7 +69,6 @@ int main() {
 
     delete [] array1;
     delete [] array2;
-    delete [] array3;
 
     return 0;
 }

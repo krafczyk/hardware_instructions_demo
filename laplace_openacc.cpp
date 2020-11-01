@@ -15,34 +15,18 @@
 #define BUF_TYPE double
 #endif
 
-#define CudaWrap(EXP) \
-{ \
-    auto ret = EXP; \
-    if (ret != cudaSuccess) { \
-        std::cerr << "Error! " << cudaGetErrorString(ret) << " (" << ret << ")" << std::endl; \
-        return 1; \
-    }\
-}
-
 inline size_t Idx(const size_t x, const size_t y, const size_t len) {
     return x+(y*len);
 }
 
-__device__
-inline size_t IdxDevice(const size_t x, const size_t y, const size_t len) {
-    return x+(y*len);
-}
-
-__global__
-void SimKernel(BUF_TYPE* in_buf, BUF_TYPE* out_buf, const size_t side_length, const BUF_TYPE alpha, const BUF_TYPE dx) {
-    const size_t i = blockIdx.x*blockDim.x+threadIdx.x;
+void SimKernel(BUF_TYPE* in_buf, BUF_TYPE* out_buf, const size_t i, const size_t side_length, const BUF_TYPE alpha, const BUF_TYPE dx) {
     const size_t y_i = i/side_length;
     const size_t x_i = i-(y_i*side_length);
     if ((x_i > 0)&&(x_i < side_length-1)&&(y_i > 0)&&(y_i < side_length-1)) {
-        const BUF_TYPE up = in_buf[IdxDevice(x_i, y_i-1, side_length)];
-        const BUF_TYPE down = in_buf[IdxDevice(x_i, y_i+1, side_length)];
-        const BUF_TYPE left = in_buf[IdxDevice(x_i-1, y_i, side_length)];
-        const BUF_TYPE right = in_buf[IdxDevice(x_i+1, y_i, side_length)];
+        const BUF_TYPE up = in_buf[Idx(x_i, y_i-1, side_length)];
+        const BUF_TYPE down = in_buf[Idx(x_i, y_i+1, side_length)];
+        const BUF_TYPE left = in_buf[Idx(x_i-1, y_i, side_length)];
+        const BUF_TYPE right = in_buf[Idx(x_i+1, y_i, side_length)];
         const BUF_TYPE center = in_buf[i];
         const BUF_TYPE lap = (up+down+left+right-4*center)/(dx*dx);
         const BUF_TYPE tdiff = alpha*lap;
@@ -94,19 +78,14 @@ int main(int argc, char** argv) {
     std::cout << "Total elements: " << total_length << std::endl;
     std::cout << "Size of one buffer: " << total_length*sizeof(BUF_TYPE) << " bytes." << std::endl;
 
-    // Allocate and Initialize buffers
     BUF_TYPE* t1 = new BUF_TYPE[total_length];
+    BUF_TYPE* t2 = new BUF_TYPE[total_length];
+    // Initializing buffers
     for (size_t i = 0; i < total_length; ++i) {
         t1[i] = 0.;
     }
     // Initial conditions May not be directly in the middle.
     t1[Idx(side_length/2,side_length/2, side_length)] = 100.;       
- 
-    BUF_TYPE* dev_1 = nullptr;
-    BUF_TYPE* dev_2 = nullptr;
-    CudaWrap(cudaMalloc(&dev_1, total_length*sizeof(BUF_TYPE)));
-    CudaWrap(cudaMalloc(&dev_2, total_length*sizeof(BUF_TYPE)));
-    CudaWrap(cudaMemcpy(dev_1, t1, total_length*sizeof(BUF_TYPE), cudaMemcpyHostToDevice));
 
     std::cout << "Start simulation" << std::endl;
 
@@ -115,22 +94,19 @@ int main(int argc, char** argv) {
     BUF_TYPE t = 0.;
     for(size_t t_i=0; t_i < N; ++t_i) {
         // We don't go from beginning to end of array to simplify logic.
-        int blockSize = 256;
-        int numBlocks = (total_length+blockSize-1)/(blockSize);
-        SimKernel<<<numBlocks,blockSize>>>(dev_1, dev_2, side_length, alpha, dx);
+        #pragma acc kernels
+        for(size_t i = 0; i < total_length; ++i) {
+            SimKernel(t1, t2, i, side_length, alpha, dx);
+        }
 
         // Swap buffers
-        BUF_TYPE* dev_temp = dev_1;
-        dev_1 = dev_2;
-        dev_2 = dev_temp;
+        BUF_TYPE* ttemp = t1;
+        t1 = t2;
+        t2 = ttemp;
 
         // Iterate time
         t += dt;
     }
-    
-    // Copy result out
-    CudaWrap(cudaDeviceSynchronize());
-    CudaWrap(cudaMemcpy(t1, dev_1, total_length*sizeof(BUF_TYPE), cudaMemcpyDeviceToHost));
 
     auto stop = std::chrono::high_resolution_clock::now();
 
@@ -148,10 +124,8 @@ int main(int argc, char** argv) {
     }
     avg = avg/((BUF_TYPE)(lattice_length*lattice_length));
 
-    cudaFree(dev_1);
-    cudaFree(dev_2);
-
     delete [] t1;
+    delete [] t2;
 
     std::cout << "Number of steps taken: " << N << std::endl;
     std::cout << "Final time: " << t << std::endl;

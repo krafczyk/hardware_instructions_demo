@@ -4,8 +4,14 @@
 #include <chrono>
 #include <unistd.h>
 
-#ifndef BUF_TYPE
+#ifndef BUF_KIND
+#define BUF_KIND 0
+#endif
+
+#if(BUF_KIND == 0)
 #define BUF_TYPE float
+#else
+#define BUF_TYPE double
 #endif
 
 #define CudaWrap(EXP) \

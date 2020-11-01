@@ -13,10 +13,14 @@
 #define BUF_TYPE double
 #endif
 
+#include "mkl.h"
+
 void add_arrays(const BUF_TYPE* array1, const BUF_TYPE* array2, BUF_TYPE* array3, size_t N) {
-    for(size_t i=0; i < N; ++i) {
-        array3[i] = array1[i]+array2[i];
-    }
+    #if(BUF_KIND == 0)
+    vsAdd(N, array1, array2, array3);
+    #else
+    vdAdd(N, array1, array2, array3);
+    #endif
 }
 
 int main() {
