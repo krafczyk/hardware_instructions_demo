@@ -195,12 +195,12 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    cl_command_queue command_queue = clCreateCommandQueueWithProperties(context, pd.second[0], NULL, &ret);
-	if (ret != CL_SUCCESS) {
-		std::cerr << "Error creating command queue" << std::endl;
-		std::cerr << opencl_errstr(ret) << std::endl;
-		return 1;
-	}
+    cl_command_queue command_queue = clCreateCommandQueue(context, pd.second[0], 0, &ret);
+    if (ret != CL_SUCCESS) {
+        std::cerr << "Error creating command queue" << std::endl;
+        std::cerr << opencl_errstr(ret) << std::endl;
+        return 1;
+    }
 
     ret = clEnqueueWriteBuffer(command_queue, t1_buf, CL_TRUE, 0, total_length*sizeof(BUF_TYPE), t1, 0, NULL, NULL);
     if(ret != CL_SUCCESS) {

@@ -47,7 +47,7 @@ int main() {
     cl_int ret = clGetPlatformIDs(1, &platform_id, &ret_num_platforms);
     ret = clGetDeviceIDs(platform_id, CL_DEVICE_TYPE_DEFAULT, 1, &device_id, &ret_num_devices);
     cl_context context = clCreateContext(NULL, 1, &device_id, NULL, NULL, &ret);
-    cl_command_queue command_queue = clCreateCommandQueueWithProperties(context, device_id, 0, NULL);
+    cl_command_queue command_queue = clCreateCommandQueue(context, device_id, 0, NULL);
 
     // Create memory buffers
     cl_mem array1_mem_obj = clCreateBuffer(context, CL_MEM_READ_ONLY, num_gen*sizeof(BUF_TYPE), NULL, &ret);

@@ -1,7 +1,7 @@
 #ifndef OPENCL_HELPER_HDR
 #define OPENCL_HELPER_HDR
 
-#define CL_TARGET_OPENCL_VERSION 220
+#define CL_TARGET_OPENCL_VERSION 120
 #include <CL/cl.h>
 
 #include <iostream>
