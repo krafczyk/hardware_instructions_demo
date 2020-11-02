@@ -15,11 +15,11 @@
 
 #include "mkl.h"
 
-void add_arrays(const BUF_TYPE* array1, const BUF_TYPE* array2, BUF_TYPE* array3, size_t N) {
+void add_arrays(const BUF_TYPE* array1, BUF_TYPE* array2, size_t N) {
     #if(BUF_KIND == 0)
-    vsAdd(N, array1, array2, array3);
+    vsAdd(N, array1, array2, array2);
     #else
-    vdAdd(N, array1, array2, array3);
+    vdAdd(N, array1, array2, array2);
     #endif
 }
 
@@ -38,7 +38,6 @@ int main() {
 
     BUF_TYPE* array1 = new BUF_TYPE[num_gen];
     BUF_TYPE* array2 = new BUF_TYPE[num_gen];
-    BUF_TYPE* array3 = new BUF_TYPE[num_gen];
 
     // Fill arrays with values
     for(size_t i=0; i < num_gen; ++i) {
@@ -48,14 +47,14 @@ int main() {
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    add_arrays(array1, array2, array3, num_gen);
+    add_arrays(array1, array2, num_gen);
 
     auto stop = std::chrono::high_resolution_clock::now();
 
     // Do something with the arrays so the addition isn't optimized out.
     BUF_TYPE sum = 0.;
     for(size_t i=0; i < num_gen; ++i) {
-        sum += array3[i];
+        sum += array2[i];
     }
 
     std::cout << sum << std::endl;
@@ -68,7 +67,6 @@ int main() {
 
     delete [] array1;
     delete [] array2;
-    delete [] array3;
 
     return 0;
 }
